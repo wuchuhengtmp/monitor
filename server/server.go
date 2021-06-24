@@ -10,11 +10,12 @@ package server
 
 import (
 	"bytes"
+	"crypto/tls"
+	"fmt"
 	"github.com/urfave/cli"
+	gomail "gopkg.in/mail.v2"
 	"log"
 	"os/exec"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -26,7 +27,7 @@ func RunServer(c *cli.Context) {
 	for {
 		select {
 		case <- ticker.C:
-			getCPUSample()
+			getCPUSample(c)
 		}
 	}
 }
@@ -39,40 +40,51 @@ type Process struct {
 /**
  * 获取cpu 样本
  */
-func getCPUSample() {
-	cmd := exec.Command("ps", "aux")
+func getCPUSample(c *cli.Context) {
+	touchCpu := c.String("touchCpu")
+	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf("ps aux  | awk '$3 > %s {print $0}'" , touchCpu))
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	err := cmd.Run()
 	if err != nil {
 		log.Fatal(err)
 	}
-	processes := make([]*Process, 0)
-	for {
-		line, err := out.ReadString('\n')
-		if err!=nil {
-			break;
-		}
-		tokens := strings.Split(line, " ")
-		ft := make([]string, 0)
-		for _, t := range(tokens) {
-			if t!="" && t!="\t" {
-				ft = append(ft, t)
-			}
-		}
-		log.Println(len(ft), ft)
-		pid, err := strconv.Atoi(ft[1])
-		if err!=nil {
-			continue
-		}
-		cpu, err := strconv.ParseFloat(ft[2], 64)
-		if err!=nil {
-			log.Fatal(err)
-		}
-		processes = append(processes, &Process{pid, cpu})
-	}
-	for _, p := range(processes) {
-		log.Println("Process ", p.pid, " takes ", p.cpu, " % of the CPU")
-	}
+	res := out.String()
+	toEmail := c.String("email")
+	SendMail(res, toEmail)
 }
 
+func SendMail(content string, toEmail string)  {
+	from := "helloworlddev@163.com"
+	password := "YSPHALPWNDBNLBII"
+
+	m := gomail.NewMessage()
+
+	// Set E-Mail sender
+	m.SetHeader("From", from)
+
+	// Set E-Mail receivers
+	m.SetHeader("To", toEmail)
+
+	// Set E-Mail subject
+	m.SetHeader("Subject", "cpu 监测预警")
+
+	// Set E-Mail body. You can set plain text or html with text/html
+	m.SetBody("text/plain", content)
+
+	// Settings for SMTP server
+	d := gomail.NewDialer("smtp.163.com", 25, from, password)
+
+	// This is only needed when SSL/TLS certificate is not valid on server.
+	// In production this should be set to false.
+	d.TLSConfig = &tls.Config{InsecureSkipVerify: true}
+
+	// Now send E-Mail
+	if err := d.DialAndSend(m); err != nil {
+		fmt.Println(err)
+		panic(err)
+	}
+
+	return
+
+}

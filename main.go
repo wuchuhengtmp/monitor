@@ -20,7 +20,19 @@ func main() {
 					Name:  "commandSample",
 					Usage: "可疑进程启动行样本",
 				},
+				&cli.StringFlag{
+					Name:  "touchCpu",
+					Usage: "cpu触发值",
+					Required: true,
+				},
+				&cli.StringFlag{
+					Name:  "email",
+					Usage: "接收邮箱",
+					Required: true,
+				},
+
 			},
+
 			Action: server.RunServer,
 			Usage:  "启动监测程序",
 			Name:   "start",
